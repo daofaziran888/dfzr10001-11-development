@@ -1,0 +1,3 @@
+"""测试期额外依赖：FastAPI TestClient 基于 httpx 发请求。"""
+-r requirements.txt
+httpx>=0.27

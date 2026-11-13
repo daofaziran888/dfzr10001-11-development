@@ -34,6 +34,37 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 
 健康检查：`curl http://127.0.0.1:8000/api/health`
 
+### 测试
+
+```bash
+cd backend
+pip install -r requirements-dev.txt   # 比运行依赖多一个 httpx（TestClient 用）
+python3 -m unittest discover -s tests -v
+```
+
+前端只做类型检查与构建校验：`cd frontend && npm run build`。
+
+## 去重预检（入库前）
+
+采集去重只配置粒度与时间窗口时，入库前无法知道哪些记录会被合并。去重预检把判断前置：
+
+1. `POST /api/dedup/prechecks` 按规则的**目标字段 + 时间窗口**对采集记录（`dedup_record`）
+   生成候选组，窗口为闭区间 `[锚点-窗口, 锚点]`，每条候选都带命中的窗口起止与距离。
+2. 冲突时**保留规则（最早/最晚）优先于来源顺序**，仅采集时间相同才回退来源顺序，每组只留 1 条。
+3. 预检可中断（`/interrupt`），续跑（`/resume`）从当前候选组继续；中断态不允许确认。
+4. 确认（`/confirm`）带互斥与状态幂等：并发重复确认只生效一次，不生成重复待入库项。
+5. 确认后：
+   - 剔除结果写入追溯清单 `GET /api/dedup/removals/list`（按候选组编号分段，含窗口边界），
+     并在**采集数据存储**侧只读联动：`GET /api/storage/dedup-removals`；
+   - 胜出记录立即进入待入库 `GET /api/dedup/pending/list`，
+     **任务工作台业务面**通过 `GET /api/task/dedup-workbench` 读取；
+   - 按确认时的规则快照留档 `GET /api/dedup/archives/list`；跨月重算只追加留档，
+     不删除已入库/已留档记录。
+6. 已启用规则（如 DEDU-0001）只参与读取：预检永不改写规则配置；已有结论
+   （已确认/已剔除/已入库）的记录在新预检中标记「跳过」，不重复落地。
+
+前端「采集去重」页提供五个页签：去重规则、去重预检、剔除追溯清单、待入库（工作台）、历史留档。
+
 ### 前端
 
 ```bash

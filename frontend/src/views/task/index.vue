@@ -55,6 +55,52 @@
       </tbody>
     </table>
 
+    <section class="linkage-box">
+      <header class="linkage-head">
+        <h3>去重待入库工作台</h3>
+        <p class="page-desc">去重预检确认后立即列出的待入库条目，每条来自一个候选组的胜出记录；同时汇总剔除与留档口径。</p>
+      </header>
+      <div class="stat-row">
+        <article class="stat-card">
+          <span class="stat-label">待入库总数</span>
+          <strong class="stat-value">{{ workbench['待入库总数'] ?? 0 }}</strong>
+        </article>
+        <article class="stat-card">
+          <span class="stat-label">剔除总数</span>
+          <strong class="stat-value">{{ workbench['剔除总数'] ?? 0 }}</strong>
+        </article>
+        <article class="stat-card">
+          <span class="stat-label">留档批次</span>
+          <strong class="stat-value">{{ workbench['留档批次数'] ?? 0 }}</strong>
+        </article>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>待入库编号</th><th>规则编号</th><th>候选组编号</th><th>记录编号</th>
+            <th>目标字段</th><th>目标字段值</th><th>采集时间</th><th>来源标识</th><th>生成时间</th><th>状态</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in pendingRows" :key="String(row.id)">
+            <td>{{ row['待入库编号'] }}</td>
+            <td>{{ row['规则编号'] }}</td>
+            <td>{{ row['候选组编号'] }}</td>
+            <td>{{ row['记录编号'] }}</td>
+            <td>{{ row['目标字段'] }}</td>
+            <td>{{ row['目标字段值'] }}</td>
+            <td>{{ row['采集时间'] }}</td>
+            <td>{{ row['来源标识'] }}</td>
+            <td>{{ row['生成时间'] }}</td>
+            <td><span class="status-tag">{{ row['状态'] }}</span></td>
+          </tr>
+          <tr v-if="!pendingRows.length">
+            <td :colspan="10" class="empty-state">暂无待入库条目，去重预检确认后立即列出</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
     <footer class="page-foot">
       <span>共 {{ total }} 条采集任务记录</span>
       <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
@@ -80,6 +126,22 @@ const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
+const pendingRows = ref<Row[]>([])
+const workbench = ref<Record<string, any>>({})
+
+async function loadWorkbench() {
+  try {
+    const response = await request('/api/task/dedup-workbench')
+    if (response.ok) {
+      const payload = await response.json()
+      workbench.value = payload
+      pendingRows.value = payload['待入库条目'] ?? []
+    }
+  } catch {
+    // 联动数据读取失败不影响任务主表
+    pendingRows.value = []
+  }
+}
 
 function resetFilters() {
   filters.value = {}
@@ -126,5 +188,14 @@ async function reload() {
   }
 }
 
-onMounted(reload)
+onMounted(() => {
+  void reload()
+  void loadWorkbench()
+})
 </script>
+
+<style scoped>
+.linkage-box { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-top: 16px; }
+.linkage-head h3 { margin: 0 0 4px; font-size: 15px; }
+.status-tag { padding: 2px 8px; border-radius: 10px; font-size: 12px; background: #ecfdf3; color: #067647; border: 1px solid #abefc6; }
+</style>

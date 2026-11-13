@@ -6,11 +6,13 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Query
 
 from app.schemas import ActionResult, EntryPayload, PageResult
+from app.services.dedup_precheck import DedupPrecheckService
 from app.services.task import TaskService
 
 router = APIRouter(prefix="/api/task", tags=["采集任务"])
 
 service = TaskService()
+precheck_service = DedupPrecheckService()
 
 LIST_FIELDS = ["任务编号", "任务名称", "关联源端", "采集频率", "增量字段", "起始水位", "批次大小", "执行窗口"]
 STATUSES = ["草稿", "待执行", "执行中", "已完成"]
@@ -28,6 +30,22 @@ def list_entries(
         raise HTTPException(status_code=400, detail="每页最多 200 条，请缩小分页范围")
     items, total = service.list_entries(keyword=keyword, status=status, page=page, size=size)
     return PageResult(items=items, total=total, page=page, size=size)
+
+
+@router.get("/export")
+def export_entries() -> dict[str, Any]:
+    """导出采集任务清单：返回当前过滤条件下的全量数据。
+
+    必须声明在 ``/{entry_id}`` 之前，否则单段路径会被 int 型入口参数先匹配。
+    """
+    items, total = service.list_entries(page=1, size=10000)
+    return {"module": "task", "total": total, "items": items}
+
+
+@router.get("/dedup-workbench")
+def dedup_workbench() -> dict[str, Any]:
+    """任务工作台业务面：去重预检确认后立即列出待入库条目，并汇总剔除/留档口径。"""
+    return precheck_service.workbench_summary()
 
 
 @router.get("/{entry_id}", response_model=dict)
@@ -56,10 +74,3 @@ def run_action(entry_id: int, payload: EntryPayload) -> ActionResult:
     if entry is None:
         return ActionResult(ok=False, message=message)
     return ActionResult(ok=True, message=message, entry=entry)
-
-
-@router.get("/export")
-def export_entries() -> dict[str, Any]:
-    """导出采集任务清单：返回当前过滤条件下的全量数据。"""
-    items, total = service.list_entries(page=1, size=10000)
-    return {"module": "task", "total": total, "items": items}

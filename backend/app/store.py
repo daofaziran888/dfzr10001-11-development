@@ -8,10 +8,24 @@ from typing import Any
 
 from app.seed import SEED_ROWS
 
+# 运营概览只统计业务模块；去重预检的运行态表（预检单、剔除追溯、待入库、留档）
+# 属于业务过程数据，不进入看板口径。
+BUSINESS_MODULES = [
+    "source", "website", "task", "schedule", "increment", "rpa", "log",
+    "retry", "proxy", "parser", "dedup", "release", "alert", "dashboard",
+    "storage", "audit",
+]
+
 
 class Store:
     def __init__(self) -> None:
         self._tables: dict[str, list[dict[str, Any]]] = {
+            name: [dict(row) for row in rows] for name, rows in SEED_ROWS.items()
+        }
+
+    def reset(self) -> None:
+        """把全部表恢复到种子数据，主要供测试隔离使用。"""
+        self._tables = {
             name: [dict(row) for row in rows] for name, rows in SEED_ROWS.items()
         }
 
@@ -27,9 +41,12 @@ class Store:
                 return row
         return None
 
+    def next_id(self, module: str) -> int:
+        return max((int(row.get("id", 0)) for row in self.rows(module)), default=0) + 1
+
     def overview(self) -> dict[str, object]:
         modules: list[dict[str, object]] = []
-        for name in self.module_names():
+        for name in BUSINESS_MODULES:
             rows = self.rows(name)
             modules.append({
                 "name": name,

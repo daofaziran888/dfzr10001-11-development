@@ -55,6 +55,38 @@
       </tbody>
     </table>
 
+    <section class="linkage-box">
+      <header class="linkage-head">
+        <h3>去重剔除追溯记录</h3>
+        <p class="page-desc">去重预检确认后生成的可追溯记录，与「采集去重 - 剔除追溯清单」同源，按候选组编号分段并保留命中窗口边界。</p>
+      </header>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>剔除编号</th><th>候选组编号</th><th>规则编号</th><th>记录编号</th>
+            <th>目标字段值</th><th>保留记录</th><th>采集时间</th><th>命中窗口边界</th><th>剔除时间</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in removalRows" :key="String(row.id)">
+            <td>{{ row['剔除编号'] }}</td>
+            <td>{{ row['候选组编号'] }}</td>
+            <td>{{ row['规则编号'] }}</td>
+            <td>{{ row['记录编号'] }}</td>
+            <td>{{ row['目标字段值'] }}</td>
+            <td>{{ row['保留记录编号'] }}</td>
+            <td>{{ row['采集时间'] }}</td>
+            <td class="boundary-cell">{{ row['命中窗口边界'] }}</td>
+            <td>{{ row['剔除时间'] }}</td>
+          </tr>
+          <tr v-if="!removalRows.length">
+            <td :colspan="9" class="empty-state">暂无剔除追溯记录，去重预检确认后在此生成</td>
+          </tr>
+        </tbody>
+      </table>
+      <footer class="page-foot"><span>共 {{ removalRows.length }} 条去重剔除追溯记录</span></footer>
+    </section>
+
     <footer class="page-foot">
       <span>共 {{ total }} 条采集数据存储记录</span>
       <span v-if="errorMessage" class="error-text">{{ errorMessage }}</span>
@@ -80,6 +112,19 @@ const total = ref(0)
 const errorMessage = ref('')
 const filters = ref<Record<string, string>>({})
 const filterFields = columns.slice(0, 3)
+const removalRows = ref<Row[]>([])
+
+async function loadRemovals() {
+  try {
+    const response = await request('/api/storage/dedup-removals')
+    if (response.ok) {
+      removalRows.value = (await response.json()).items ?? []
+    }
+  } catch {
+    // 联动数据读取失败不影响存储配置主表
+    removalRows.value = []
+  }
+}
 
 function resetFilters() {
   filters.value = {}
@@ -126,5 +171,14 @@ async function reload() {
   }
 }
 
-onMounted(reload)
+onMounted(() => {
+  void reload()
+  void loadRemovals()
+})
 </script>
+
+<style scoped>
+.linkage-box { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-top: 16px; }
+.linkage-head h3 { margin: 0 0 4px; font-size: 15px; }
+.boundary-cell { color: var(--muted); font-size: 12px; min-width: 260px; }
+</style>
